@@ -1,7 +1,19 @@
 {
   "name": "aharwise",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.0.0",
+  "description": "Client-side family nutrition screening, budget-aware grocery planning, and allergen-safe food swap tool for Indian households.",
+  "license": "MIT",
+  "keywords": [
+    "nutrition",
+    "india",
+    "budget",
+    "allergen-safety",
+    "react",
+    "typescript",
+    "vite",
+    "biohackers"
+  ],
   "type": "module",
   "scripts": {
     "dev": "vite --host 0.0.0.0 --port 3000",

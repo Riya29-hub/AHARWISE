@@ -21,7 +21,9 @@ export function filterByProfileSafety<T extends Pick<Food, 'allergens' | 'diet' 
 }
 
 export function estimateWeeklyCost(food: Food, gramsPerWeek: number, storeMultiplier = 1): number {
-  return Math.max(0, (food.pricePer100 * Math.max(0, gramsPerWeek) * Math.max(0, storeMultiplier)) / 100)
+  const safeGrams = Number.isFinite(gramsPerWeek) ? Math.max(0, gramsPerWeek) : 0
+  const safeMultiplier = Number.isFinite(storeMultiplier) ? Math.max(0, storeMultiplier) : 1
+  return Math.max(0, (food.pricePer100 * safeGrams * safeMultiplier) / 100)
 }
 
 export function rankByNutritionPerRupee(foods: Food[]): Array<{ food: Food; score: number; explanation: string }> {
@@ -58,15 +60,16 @@ export function buildGroceryList(profile: Profile, foods: Food[], storeMultiplie
     Grains: 3000, 'Pulses & Protein': 1800, 'Dairy & Alternatives': 2200,
     Vegetables: 2600, Fruits: 1400, Snacks: 500, Beverages: 900, Processed: 400,
   }
+  const budget = Number.isFinite(profile.weeklyBudget) ? Math.max(0, profile.weeklyBudget) : 0
   for (const { food } of ranked) {
     const gramsPerWeek = Math.round((categoryCaps[food.category] ?? 500) * familySize(profile) / 4 / (countByCategory.get(food.category) ?? 1))
     const cost = estimateWeeklyCost(food, gramsPerWeek, storeMultiplier)
-    if (total + cost <= profile.weeklyBudget) {
+    if (total + cost <= budget) {
       items.push({ food, gramsPerWeek, cost })
       total += cost
     }
   }
-  return { items, total, remaining: Math.max(profile.weeklyBudget - total, 0) }
+  return { items, total, remaining: Math.max(budget - total, 0) }
 }
 
 export function calculateIntake(
@@ -128,4 +131,18 @@ export function foodGroupCoverage(foods: Food[]): Array<{ category: string; coun
 
 export function matchesAllergen(food: Food, allergens: Allergen[]): boolean {
   return food.allergens.some((allergen) => allergens.includes(allergen))
+}
+
+export function averageTargets(profile: Pick<Profile, 'members'>, targets: Record<string, NutrientTargets>): NutrientTargets {
+  const members = profile.members.length ? profile.members : [{ ageGroup: 'adult' as const }]
+  const values = members.map((member) => targets[member.ageGroup] ?? targets.adult)
+  const average = (key: keyof NutrientTargets) => Math.round(values.reduce((sum, item) => sum + Number(item[key] ?? 0), 0) / values.length)
+  return {
+    label: 'Simplified screening targets',
+    protein: average('protein'),
+    fiber: average('fiber'),
+    calcium: average('calcium'),
+    iron: average('iron'),
+    sodiumLimit: average('sodiumLimit'),
+  }
 }

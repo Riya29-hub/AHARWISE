@@ -29,6 +29,7 @@ export function NutrientChart({ values, targets, title = 'Nutrient intake and sc
 }
 
 export function SpendChart({ items, title = 'Estimated spend by food group' }: { items: GroceryItem[]; title?: string }) {
+  if (items.length === 0) return <div className="chart-placeholder">No grocery items fit the current filters and budget.</div>
   const totals = new Map<string, number>()
   for (const item of items) totals.set(item.food.category, (totals.get(item.food.category) ?? 0) + item.cost)
   const labels = Array.from(totals.keys())

@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import foodFile from '../../../public/data/foods.json'
 import substitutionRules from '../../../public/data/substitutions.json'
-import { buildGroceryList, calculateGap, calculateIntake, estimateWeeklyCost, filterByAllergy, filterByDiet, filterByProfileSafety, findSubstitutions } from '../nutrition'
+import { averageTargets, buildGroceryList, calculateGap, calculateIntake, estimateWeeklyCost, filterByAllergy, filterByDiet, filterByProfileSafety, findSubstitutions } from '../nutrition'
 import { clearProfile, getProfile, getScreening, saveProfile, saveScreening } from '../storage'
 import type { Allergen, Food, Profile } from '../../types'
 
@@ -33,10 +33,12 @@ describe('nutrition screening calculations', () => {
     expect(filterByDiet(foods, 'vegan', ['ragi']).some((food) => food.id === 'ragi')).toBe(false)
   })
 
-  it('estimates weekly cost with store multiplier', () => {
+  it('estimates weekly cost with store multiplier and guards non-finite inputs', () => {
     const rice = foods.find((food) => food.id === 'rice')!
     expect(estimateWeeklyCost(rice, 300, 1.12)).toBeCloseTo(20.16)
     expect(estimateWeeklyCost(rice, -100)).toBe(0)
+    expect(estimateWeeklyCost(rice, 100, Number.NaN)).toBe(6)
+    expect(estimateWeeklyCost(rice, Number.NaN, 1)).toBe(0)
   })
 
   it('keeps grocery lists within budget and excludes allergens', () => {
@@ -45,6 +47,7 @@ describe('nutrition screening calculations', () => {
     expect(result.total).toBeLessThanOrEqual(profile.weeklyBudget)
     expect(result.remaining).toBeGreaterThanOrEqual(0)
     expect(result.items.every((item) => !item.food.allergens.some((allergen) => profile.allergies.includes(allergen)))).toBe(true)
+    expect(buildGroceryList({ ...profileBase, weeklyBudget: 0 }, foods).items).toEqual([])
   })
 
   it('calculates average daily per-person intake from weekly servings', () => {
@@ -53,6 +56,16 @@ describe('nutrition screening calculations', () => {
     expect(result.protein).toBe(2.7)
     expect(result.fiber).toBe(0.4)
     expect(calculateIntake([rice], { rice: 100 }, { rice: 7 }, 2).protein).toBe(1.4)
+  })
+
+  it('averages screening targets across household member age groups', () => {
+    const allTargets = {
+      toddler: { ...targets, protein: 16, fiber: 10, calcium: 700, iron: 7, sodiumLimit: 1200 },
+      adult: targets,
+    }
+    const avg = averageTargets({ members: [{ id: '1', ageGroup: 'adult', age: 30 }, { id: '2', ageGroup: 'toddler', age: 2 }] }, allTargets)
+    expect(avg.protein).toBe(33)
+    expect(avg.sodiumLimit).toBe(1600)
   })
 
   it('uses the requested gap status thresholds and sodium limit', () => {
