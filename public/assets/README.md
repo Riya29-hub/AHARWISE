@@ -1,0 +1,1 @@
+Place the approved, unmodified `logo.png` and `logo-icon.png` files here. They were not included in the supplied Stitch archive, so this project intentionally does not generate replacements.

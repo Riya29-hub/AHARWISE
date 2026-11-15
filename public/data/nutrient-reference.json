@@ -1,0 +1,10 @@
+{
+  "label": "Simplified screening targets",
+  "targets": {
+    "toddler": { "protein": 16, "fiber": 10, "calcium": 700, "iron": 7, "sodiumLimit": 1200 },
+    "child": { "protein": 25, "fiber": 15, "calcium": 800, "iron": 10, "sodiumLimit": 1500 },
+    "teen": { "protein": 50, "fiber": 25, "calcium": 1000, "iron": 15, "sodiumLimit": 2000 },
+    "adult": { "protein": 50, "fiber": 25, "calcium": 1000, "iron": 18, "sodiumLimit": 2000 },
+    "senior": { "protein": 50, "fiber": 25, "calcium": 1000, "iron": 8, "sodiumLimit": 2000 }
+  }
+}

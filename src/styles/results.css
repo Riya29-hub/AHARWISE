@@ -1,0 +1,8 @@
+.results-heading h1 span {
+  display: block;
+  margin: 5px 0 0;
+  color: #718071;
+  font-family: Inter, sans-serif;
+  font-size: 13px;
+  font-weight: 500;
+}

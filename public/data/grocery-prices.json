@@ -1,0 +1,5 @@
+{
+  "location": "Bengaluru",
+  "stores": ["Local grocery store", "Supermarket", "Weekly market"],
+  "multipliers": { "Local grocery store": 1, "Supermarket": 1.12, "Weekly market": 0.9 }
+}

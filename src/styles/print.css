@@ -1,0 +1,43 @@
+.results-page .print-disclaimer {
+  display: block;
+  margin-top: 16px;
+  padding: 14px 16px;
+  color: #31493a;
+  background: #eff4eb;
+  border: 1px solid #d5e5d1;
+  border-radius: 12px;
+  font-size: 11px;
+}
+
+.results-page .print-disclaimer p { margin: 5px 0 0; }
+
+@media print {
+  .site-footer {
+    display: block !important;
+    padding: 8mm 0 0;
+    color: #111;
+    background: #fff;
+  }
+
+  .site-footer .footer-top,
+  .site-footer .copyright,
+  .results-page .print-disclaimer { display: none !important; }
+
+  .site-footer .disclaimer {
+    padding: 8mm 0 0;
+    color: #111;
+    background: #fff;
+    border: 0;
+    border-top: 1px solid #888;
+    border-radius: 0;
+  }
+
+  .site-footer .disclaimer p { color: #111; }
+
+  .results-page .print-disclaimer {
+    color: #111;
+    background: #fff;
+    border-color: #888;
+    border-radius: 0;
+  }
+}

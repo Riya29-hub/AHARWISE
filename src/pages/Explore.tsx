@@ -1,0 +1,139 @@
+import { lazy, Suspense, useMemo, useState } from 'react'
+import { ArrowDownToLine, ArrowRight, Check, Clipboard, Printer, ShieldAlert } from 'lucide-react'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
+import { useApp } from '../app/useApp'
+import { buildGroceryList, calculateGap, calculateIntake, filterByProfileSafety, findSubstitutions, foodGroupCoverage, rankByNutritionPerRupee } from '../lib/nutrition'
+import type { Food, GroceryItem, NutrientTargets, Profile } from '../types'
+
+const NutrientChart = lazy(() => import('../components/Charts').then((module) => ({ default: module.NutrientChart })))
+const SpendChart = lazy(() => import('../components/Charts').then((module) => ({ default: module.SpendChart })))
+const FoodGroupChart = lazy(() => import('../components/Charts').then((module) => ({ default: module.FoodGroupChart })))
+const CostComparisonChart = lazy(() => import('../components/Charts').then((module) => ({ default: module.CostComparisonChart })))
+const ChartFallback = () => <div className="chart-placeholder" aria-label="Loading chart">Loading chart…</div>
+const ageLabels: Record<string, string> = { toddler: 'Toddler', child: 'Child', teen: 'Teen', adult: 'Adult', senior: 'Senior' }
+const units: Record<string, string> = { protein: 'g', fiber: 'g', calcium: 'mg', iron: 'mg', sodium: 'mg' }
+
+function safeFoodsFor(profile: Profile, foods: Food[]): Food[] {
+  return filterByProfileSafety(foods, profile)
+}
+
+function selectedIntake(foods: Food[], screening: ReturnType<typeof useApp>['screening'], members: number, profile: Profile) {
+  const allowedIds = new Set(safeFoodsFor(profile, foods).map((food) => food.id))
+  const selected = screening.selectedFoods.flatMap((item) => {
+    const food = foods.find((entry) => entry.id === item.foodId)
+    return food && allowedIds.has(food.id) ? [food] : []
+  })
+  const safeSelection = screening.selectedFoods.filter((item) => allowedIds.has(item.foodId))
+  const portions = Object.fromEntries(safeSelection.map((item) => [item.foodId, 100 * item.portionMultiplier]))
+  const servings = Object.fromEntries(safeSelection.map((item) => [item.foodId, item.servingsPerWeek]))
+  return calculateIntake(selected, portions, servings, members)
+}
+
+function averageTargets(profile: Profile, targets: Record<string, NutrientTargets>): NutrientTargets {
+  const members = profile.members.length ? profile.members : [{ ageGroup: 'adult' as const }]
+  const values = members.map((member) => targets[member.ageGroup] ?? targets.adult)
+  const average = (key: keyof NutrientTargets) => Math.round(values.reduce((sum, item) => sum + Number(item[key] ?? 0), 0) / values.length)
+  return { label: 'Simplified screening targets', protein: average('protein'), fiber: average('fiber'), calcium: average('calcium'), iron: average('iron'), sodiumLimit: average('sodiumLimit') }
+}
+
+function GroceryList({ items, total, interactive = false }: { items: GroceryItem[]; total: number; interactive?: boolean }) {
+  const [checked, setChecked] = useState<string[]>([])
+  const categories = [...new Set(items.map((item) => item.food.category))]
+  return <div className="grocery-list">{categories.map((category) => <section key={category}><h3>{category}</h3>{items.filter((item) => item.food.category === category).map((item) => <label className={`grocery-item ${checked.includes(item.food.id) ? 'checked' : ''}`} key={item.food.id}><input type="checkbox" disabled={!interactive} checked={checked.includes(item.food.id)} onChange={() => setChecked((current) => current.includes(item.food.id) ? current.filter((id) => id !== item.food.id) : [...current, item.food.id])} /><span className="grocery-emoji" aria-hidden="true">{item.food.imageEmoji}</span><span className="grocery-name">{item.food.name}<small>{Math.round(item.gramsPerWeek)} {item.food.unit} / week</small></span><b>₹{Math.round(item.cost)}</b></label>)}</section>)}{items.length === 0 && <p className="empty-inline">No safe items fit this budget yet. Try adjusting the budget or store.</p>}<div className="grocery-total"><span>Estimated total</span><b>₹{Math.round(total).toLocaleString('en-IN')}</b></div></div>
+}
+
+function saveText(text: string, fileName: string) {
+  const file = new Blob([text], { type: 'text/plain;charset=utf-8' })
+  const url = URL.createObjectURL(file)
+  const link = document.createElement('a')
+  link.href = url; link.download = fileName; link.click()
+  URL.revokeObjectURL(url)
+}
+
+export function BudgetPage() {
+  const { data, profile, screening, notify } = useApp()
+  const [onlyAffordable, setOnlyAffordable] = useState(false)
+  const multiplier = data?.prices.multipliers[profile.store] ?? 1
+  if (!data) return <div className="page-wrap"><div className="loading-surface">Loading budget data…</div></div>
+  const safeFoods = safeFoodsFor(profile, data.foods)
+  const list = buildGroceryList(profile, data.foods, multiplier)
+  const ranked = rankByNutritionPerRupee(safeFoods).filter(({ food }) => !onlyAffordable || food.pricePer100 <= Math.max(profile.weeklyBudget / 35, 10))
+  const copyList = async () => {
+    const text = list.items.map((item) => `${item.food.name}: ${Math.round(item.gramsPerWeek)} ${item.food.unit} — ₹${Math.round(item.cost)}`).join('\n')
+    try { await navigator.clipboard.writeText(text); notify('Grocery list copied.') } catch { notify('Clipboard unavailable. Use Download list instead.') }
+  }
+  return <div className="page-wrap"><div className="page-heading"><div><span className="eyebrow">Weekly planning</span><h1>Make the budget go further.</h1><p>Safe foods ranked by a simplified nutrient-per-rupee score. Prices are sample estimates for {profile.city || 'Bengaluru'}.</p></div><Link className="button button-secondary" to="/profile">Edit profile <ArrowRight size={16} /></Link></div><div className="kpi-grid"><article className="kpi-card"><span>Weekly budget</span><b>₹{profile.weeklyBudget.toLocaleString('en-IN')}</b><small>{profile.store}</small></article><article className="kpi-card"><span>Estimated grocery list</span><b>₹{Math.round(list.total).toLocaleString('en-IN')}</b><small>Based on sample quantities</small></article><article className="kpi-card kpi-green"><span>Remaining</span><b>₹{Math.round(list.remaining).toLocaleString('en-IN')}</b><small>Within selected budget</small></article></div>{profile.weeklyBudget < 1000 && <div className="notice notice-warm"><b>Budget looks tight.</b> This list uses sample values and may not cover every household need. Local prices and quantities vary.</div>}<div className="explore-grid"><section className="panel"><div className="panel-title"><div><h2>Nutrition value ranking</h2><p>Weighted score per ₹100; compare foods in context, not as a prescription.</p></div><label className="toggle-control"><input type="checkbox" checked={onlyAffordable} onChange={(event) => setOnlyAffordable(event.target.checked)} /><span>Budget-friendly only</span></label></div><div className="table-scroll"><table className="data-table"><thead><tr><th>Food</th><th>Category</th><th>₹ / 100</th><th>Score</th></tr></thead><tbody>{ranked.slice(0, 15).map(({ food, score, explanation }) => <tr key={food.id}><td><span className="table-food"><span aria-hidden="true">{food.imageEmoji}</span>{food.name}</span></td><td>{food.category}</td><td>₹{food.pricePer100}</td><td title={explanation}>{score.toFixed(2)}</td></tr>)}</tbody></table></div></section><section className="panel chart-panel"><div className="panel-title"><div><h2>Estimated spend mix</h2><p>Sample category-level grocery costs.</p></div></div><Suspense fallback={<ChartFallback />}><SpendChart items={list.items} /></Suspense><p className="estimate-note">Prices are sample estimates and may differ by market and season.</p></section></div><div className="explore-grid budget-lower"><section className="panel"><div className="panel-title"><div><h2>Grocery list</h2><p>All items have been checked against this profile’s filters.</p></div><div className="utility-actions"><button className="button button-quiet" onClick={copyList}><Clipboard size={15} /> Copy</button><button className="button button-quiet" onClick={() => window.print()}><Printer size={15} /> Print</button><button className="button button-quiet" onClick={() => saveText(list.items.map((item) => `${item.food.name} — ${Math.round(item.gramsPerWeek)} ${item.food.unit} — ₹${Math.round(item.cost)}`).join('\n'), 'aharwise-grocery-list.txt')}><ArrowDownToLine size={15} /> Download</button></div></div><GroceryList items={list.items} total={list.total} interactive /></section><section className="panel"><div className="panel-title"><div><h2>Budget swaps</h2><p>Safe options that may reduce sample costs.</p></div></div><div className="swap-list">{data.substitutions.filter((rule) => rule.reason === 'cost').flatMap((rule) => findSubstitutions(rule.from, 'cost', profile, data.foods, [rule]).map((swap) => ({ ...swap, key: `${rule.from}-${rule.to}` }))).filter((swap) => swap.costDelta < 0).slice(0, 3).map((swap) => <div className="swap-row" key={swap.key}><span>{swap.original.imageEmoji} {swap.original.name}</span><ArrowRight size={15} /><b>{swap.replacement.imageEmoji} {swap.replacement.name}</b><small>{swap.costDelta < 0 ? `₹${Math.abs(swap.costDelta)} less / 100` : 'Similar cost'}</small></div>)}</div><Link className="text-link" to="/substitutions">Explore all substitutions <ArrowRight size={15} /></Link></section></div><div className="notice notice-neutral">This list is illustrative, not a meal plan. Choose foods and quantities that work for your household.</div><div className="sr-only" aria-live="polite">{screening.selectedFoods.length} foods from screening profile</div></div>
+}
+
+export function SubstitutionsPage() {
+  const { data: loadedData, profile } = useApp()
+  const [foodId, setFoodId] = useState('milk')
+  const [reason, setReason] = useState('any')
+  const [goal, setGoal] = useState('any')
+  const [sortMode, setSortMode] = useState<'balanced' | 'cheapest'>('balanced')
+  const allowedFoods = loadedData ? safeFoodsFor(profile, loadedData.foods) : []
+  const effectiveFoodId = allowedFoods.some((food) => food.id === foodId) ? foodId : allowedFoods[0]?.id ?? ''
+  if (!loadedData) return <div className="page-wrap"><div className="loading-surface">Loading substitution data…</div></div>
+  const data = { ...loadedData, foods: allowedFoods }
+  const original = allowedFoods.find((food) => food.id === effectiveFoodId)
+  const choices = findSubstitutions(effectiveFoodId, reason, profile, data.foods, data.substitutions)
+    .filter((entry) => goal === 'any' || data.substitutions.some((rule) => rule.from === effectiveFoodId && rule.to === entry.replacement.id && rule.goal === goal))
+    .sort((a, b) => sortMode === 'cheapest' ? a.replacement.pricePer100 - b.replacement.pricePer100 : (b.replacement.nutrients.protein + b.replacement.nutrients.fiber) - (a.replacement.nutrients.protein + a.replacement.nutrients.fiber))
+  return <div className="page-wrap"><div className="page-heading"><div><span className="eyebrow">Food substitution</span><h1>Find a swap that fits.</h1><p>Compare sample nutrients and costs. Every option is checked against the selected diet and allergens.</p></div></div><section className="panel substitute-filters"><label className="field-label">Food to replace<select className="text-input" value={foodId} onChange={(event) => setFoodId(event.target.value)}>{data.foods.map((food) => <option value={food.id} key={food.id}>{food.name}</option>)}</select></label><label className="field-label">Reason<select className="text-input" value={reason} onChange={(event) => setReason(event.target.value)}><option value="any">Any reason</option>{['allergy', 'cost', 'availability', 'nutrition'].map((value) => <option key={value}>{value}</option>)}</select></label><label className="field-label">Nutrient goal<select className="text-input" value={goal} onChange={(event) => setGoal(event.target.value)}><option value="any">Any goal</option>{['protein', 'fiber', 'iron', 'calcium'].map((value) => <option key={value}>{value}</option>)}</select></label><fieldset className="sort-field"><legend>Sort options</legend><label><input type="radio" name="sort" checked={sortMode === 'balanced'} onChange={() => setSortMode('balanced')} /> Balanced</label><label><input type="radio" name="sort" checked={sortMode === 'cheapest'} onChange={() => setSortMode('cheapest')} /> Cheapest</label></fieldset></section><div className="substitution-results">{original && choices.map((choice) => <article className="panel substitution-card" key={`${choice.original.id}-${choice.replacement.id}`}><div className="swap-heading"><div className="food-swap"><span><i aria-hidden="true">{choice.original.imageEmoji}</i><small>Current</small><b>{choice.original.name}</b></span><ArrowRight size={20} /><span><i aria-hidden="true">{choice.replacement.imageEmoji}</i><small>Possible swap</small><b>{choice.replacement.name}</b></span></div><span className="cost-delta">{choice.costDelta < 0 ? `−₹${Math.abs(choice.costDelta)}` : `+₹${choice.costDelta}`}<small>per 100 {choice.original.unit}</small></span></div><p>{choice.note}</p><div className="comparison-grid"><div><span>Protein</span><b>{choice.original.nutrients.protein} g <ArrowRight size={13} /> {choice.replacement.nutrients.protein} g</b></div><div><span>Fiber</span><b>{choice.original.nutrients.fiber} g <ArrowRight size={13} /> {choice.replacement.nutrients.fiber} g</b></div><div><span>Iron</span><b>{choice.original.nutrients.iron} mg <ArrowRight size={13} /> {choice.replacement.nutrients.iron} mg</b></div><div><span>Calcium</span><b>{choice.original.nutrients.calcium} mg <ArrowRight size={13} /> {choice.replacement.nutrients.calcium} mg</b></div></div>{choice.allergenWarning && <div className="notice notice-danger"><ShieldAlert size={16} /> {choice.allergenWarning}</div>}<div className="mini-chart"><Suspense fallback={<ChartFallback />}><CostComparisonChart original={{ name: choice.original.name, price: choice.original.pricePer100 }} replacement={{ name: choice.replacement.name, price: choice.replacement.pricePer100 }} /></Suspense></div></article>)}{choices.length === 0 && <div className="empty-state"><ShieldAlert size={25} /><h2>No safe substitute found</h2><p>There may be no listed option that fits the current diet and allergen filters. Try another food or reason.</p></div>}</div><p className="estimate-note">Nutrient and price values are approximate sample data. Check product labels for allergens and cross-contact.</p></div>
+}
+
+export function GapsPage() {
+  const { data, profile, screening } = useApp()
+  const [selectedMember, setSelectedMember] = useState(0)
+  const [familyView, setFamilyView] = useState(true)
+  if (!data) return <div className="page-wrap"><div className="loading-surface">Loading screening targets…</div></div>
+  const intake = selectedIntake(data.foods, screening, profile.members.length || 1, profile)
+  const member = profile.members[selectedMember]
+  const targets = familyView ? averageTargets(profile, data.targets) : data.targets[member?.ageGroup ?? 'adult'] ?? data.targets.adult
+  const gaps = calculateGap(intake, targets)
+  const safeFoods = safeFoodsFor(profile, data.foods)
+  const suggestions = safeFoods.filter((food) => ['protein', 'fiber', 'calcium', 'iron'].some((key) => gaps[key]?.status !== 'on track' && food.nutrients[key as keyof Food['nutrients']] > 0))
+    .filter((food) => food.pricePer100 <= Math.max(profile.weeklyBudget / 25, 30)).slice(0, 5)
+  const chartValues = Object.fromEntries(Object.entries(intake).map(([key, value]) => [key, value]))
+  const chartTargets = { protein: targets.protein, fiber: targets.fiber, calcium: targets.calcium, iron: targets.iron }
+  const allGood = Object.values(gaps).every((gap) => gap.status === 'on track')
+  return <div className="page-wrap"><div className="page-heading"><div><span className="eyebrow">Nutrition gap detector</span><h1>A useful snapshot, not a verdict.</h1><p>Compare selected foods with simplified screening targets and explore food-based ideas.</p></div><Link className="button button-secondary" to="/screening">Edit foods</Link></div><div className="view-tabs" role="tablist" aria-label="Screening view"><button role="tab" aria-selected={familyView} className={familyView ? 'view-tab active' : 'view-tab'} onClick={() => setFamilyView(true)}>Whole family</button><button role="tab" aria-selected={!familyView} className={!familyView ? 'view-tab active' : 'view-tab'} onClick={() => setFamilyView(false)}>Per member</button></div>{!familyView && profile.members.length > 0 && <div className="member-tabs" role="tablist" aria-label="Choose a family member">{profile.members.map((item, index) => <button key={item.id} role="tab" aria-selected={selectedMember === index} className={selectedMember === index ? 'small-chip active' : 'small-chip'} onClick={() => setSelectedMember(index)}>{ageLabels[item.ageGroup]} {index + 1}</button>)}</div>}<div className="explore-grid gap-layout"><section className="panel"><div className="panel-title"><div><h2>{familyView ? 'Estimated intake vs target' : `${ageLabels[member?.ageGroup ?? 'adult']} screening comparison`}</h2><p>Screening target (simplified), per person per day.</p></div></div><Suspense fallback={<ChartFallback />}><NutrientChart values={chartValues} targets={chartTargets} /></Suspense><div className="status-table">{Object.entries(gaps).map(([key, gap]) => <div className="status-row" key={key}><span>{key[0].toUpperCase() + key.slice(1)}</span><b>{gap.intake} {units[key]}</b><span>Target {gap.target} {units[key]}</span><span className={`status-chip status-${gap.status.replace(' ', '-')}`}>{gap.status}</span></div>)}</div></section><aside className="panel sodium-panel"><span className="eyebrow">Sodium screening</span><h2>{gaps.sodium.status === 'above limit' ? 'Above simplified limit' : 'Within simplified limit'}</h2><div className="sodium-gauge" style={{ '--gauge-value': `${Math.min(gaps.sodium.percent, 100)}%` } as React.CSSProperties}><span><b>{intake.sodium}</b><small>mg estimated</small></span></div><p>Reference limit: {targets.sodiumLimit.toLocaleString()} mg/day</p><p className="estimate-note">This is a simplified estimate, not individual medical guidance.</p></aside></div>{allGood ? <div className="notice notice-good"><Check size={18} /><div><b>All good!</b><span>Selected foods are at or above these simplified screening targets. This estimate does not confirm overall nutrition status.</span></div></div> : <section className="panel suggestions-panel"><div className="panel-title"><div><h2>Food ideas to explore</h2><p>Options that fit this profile and sample budget. These are not clinical recommendations.</p></div></div><div className="suggestion-grid">{suggestions.map((food) => <article className="suggestion-card" key={food.id}><span aria-hidden="true">{food.imageEmoji}</span><div><b>{food.name}</b><small>{food.category} · ₹{food.pricePer100} / 100 {food.unit}</small></div><span className="safe-mark"><Check size={14} /> Safe filter</span></article>)}</div>{suggestions.length === 0 && <p className="empty-inline">No matching ideas fit the current filters. Update your food log or budget to explore more options.</p>}</section>}<div className="notice notice-neutral"><b>Screening estimates, not a diagnosis.</b> Food values and targets are simplified; needs differ between people. Speak with a qualified healthcare professional or registered dietitian for individual needs.</div></div>
+}
+
+export function ResultsPage() {
+  const { data, profile, screening } = useApp()
+  const navigate = useNavigate()
+  const intake = data ? selectedIntake(data.foods, screening, profile.members.length || 1, profile) : null
+  const safeFoods = data ? safeFoodsFor(profile, data.foods) : []
+  const chosenFoods = data ? screening.selectedFoods.flatMap((item) => {
+    const food = data.foods.find((entry) => entry.id === item.foodId)
+    return food && safeFoods.some((safe) => safe.id === food.id) ? [food] : []
+  }) : []
+  const targets = data ? averageTargets(profile, data.targets) : null
+  const gaps = intake && targets ? calculateGap(intake, targets) : null
+  const storeMultiplier = data?.prices.multipliers[profile.store] ?? 1
+  const grocery = data ? buildGroceryList(profile, data.foods, storeMultiplier) : { items: [], total: 0, remaining: 0 }
+  const listSafe = data ? safeFoodsFor(profile, data.foods) : []
+  const avoided = data ? data.foods.filter((food) => food.allergens.some((allergen) => profile.allergies.includes(allergen))) : []
+  const substitutionHighlights = useMemo(() => {
+    if (!data) return []
+    return data.substitutions.flatMap((rule) => findSubstitutions(rule.from, rule.reason, profile, data.foods, [rule])).slice(0, 3)
+  }, [data, profile])
+  if (!data || !intake || !targets || !gaps) return <div className="page-wrap"><div className="loading-surface">Loading your estimates…</div></div>
+  const countOnTrack = Object.values(gaps).filter((gap) => gap.status === 'on track').length
+  const totalNutrients = Object.keys(gaps).length
+  const completion = Math.round(countOnTrack / totalNutrients * 100)
+  const copySummary = async () => {
+    const summary = `${profile.familyName || 'Family'} nutrition screening\n${countOnTrack} of ${totalNutrients} nutrients on track (simplified estimate)\nEstimated weekly grocery list: ₹${Math.round(grocery.total)}\nResults are estimates based on the information you provide.`
+    try { await navigator.clipboard.writeText(summary) } catch { /* Clipboard may be unavailable in preview contexts. */ }
+  }
+  return <div className="page-wrap results-page"><div className="results-heading"><div><span className="eyebrow">Family screening snapshot</span><h1>{profile.familyName || 'Your family'}<span>Estimated results</span></h1><p>{profile.members.length} members · {profile.diet} · {profile.city || 'Bengaluru'}</p></div><div className="result-actions"><button className="button button-outline" onClick={() => void copySummary()}><Clipboard size={15} /> Copy summary</button><button className="button button-outline" onClick={() => window.print()}><Printer size={15} /> Print / Save PDF</button><Link className="button button-primary" to="/profile">Edit profile</Link></div></div><div className="notice notice-neutral results-caution"><ShieldAlert size={17} /> Results are estimates based on the information you provide. This is general nutrition screening and education only.</div><div className="results-top-grid"><section className="panel snapshot-card"><span className="eyebrow">Screening snapshot</span><div className="snapshot-content"><div className="snapshot-ring" style={{ '--ring-value': `${completion}%` } as React.CSSProperties}><div><b>{countOnTrack}</b><span>of {totalNutrients}</span></div></div><div><h2>{countOnTrack} of {totalNutrients} nutrients on track</h2><p>Against simplified family-average screening targets.</p><div className="snapshot-facts"><span><b>{screening.selectedFoods.length}</b> foods screened</span><span><b>{profile.members.length}</b> family members</span></div></div></div></section><section className="panel budget-summary"><span className="eyebrow">Weekly budget</span><div className="budget-big">₹{Math.round(grocery.total).toLocaleString('en-IN')}<small> estimated list</small></div><div className="budget-track"><i style={{ width: `${profile.weeklyBudget > 0 ? Math.min(grocery.total / profile.weeklyBudget * 100, 100) : 0}%` }} /></div><div className="budget-labels"><span>Estimated spend</span><b>₹{Math.round(profile.weeklyBudget).toLocaleString('en-IN')} budget</b></div><p>₹{Math.round(grocery.remaining).toLocaleString('en-IN')} remaining · {profile.store}</p></section></div><div className="results-grid"><section className="panel chart-panel"><div className="panel-title"><div><h2>Nutrition gap snapshot</h2><p>Daily intake vs screening target (simplified)</p></div></div><Suspense fallback={<ChartFallback />}><NutrientChart values={intake} targets={{ protein: targets.protein, fiber: targets.fiber, calcium: targets.calcium, iron: targets.iron }} /></Suspense><div className="status-table compact">{Object.entries(gaps).map(([key, gap]) => <div className="status-row" key={key}><span>{key}</span><b>{gap.intake} {units[key]}</b><span className={`status-chip status-${gap.status.replace(' ', '-')}`}>{gap.status}</span></div>)}</div></section><section className="panel chart-panel"><div className="panel-title"><div><h2>Food-group coverage</h2><p>Food groups represented in your screening log</p></div></div><Suspense fallback={<ChartFallback />}><FoodGroupChart rows={foodGroupCoverage(chosenFoods)} /></Suspense></section><section className="panel chart-panel"><div className="panel-title"><div><h2>Estimated budget mix</h2><p>Grocery list by category</p></div></div><Suspense fallback={<ChartFallback />}><SpendChart items={grocery.items} /></Suspense></section></div><div className="results-grid lists-grid"><section className="panel"><div className="panel-title"><div><h2>Suitable foods</h2><p>Foods that fit the current diet and allergen settings.</p></div></div><div className="suitable-foods">{listSafe.slice(0, 12).map((food) => <span className="food-pill" key={food.id}><i aria-hidden="true">{food.imageEmoji}</i>{food.name}</span>)}</div></section><section className="panel foods-to-avoid"><div className="panel-title"><div><h2>Foods to avoid</h2><p>Contains a selected allergen. Always verify product labels.</p></div></div><div className="suitable-foods">{avoided.map((food) => <span className="food-pill blocked-pill" key={food.id}><ShieldAlert size={13} aria-hidden="true" />{food.name}</span>)}</div>{avoided.length === 0 && <p className="empty-inline">No listed foods match selected allergens.</p>}</section></div><div className="results-grid"><section className="panel"><div className="panel-title"><div><h2>Possible substitutions</h2><p>Options that passed the selected diet and allergen filters.</p></div><Link className="text-link" to="/substitutions">See all <ArrowRight size={14} /></Link></div><div className="swap-list">{substitutionHighlights.map((swap) => <div className="swap-row" key={`${swap.original.id}-${swap.replacement.id}`}><span>{swap.original.imageEmoji} {swap.original.name}</span><ArrowRight size={15} /><b>{swap.replacement.imageEmoji} {swap.replacement.name}</b><small>{swap.note}</small></div>)}</div></section><section className="panel"><div className="panel-title"><div><h2>Grocery list</h2><p>Within ₹{profile.weeklyBudget.toLocaleString('en-IN')} weekly sample budget</p></div></div><GroceryList items={grocery.items} total={grocery.total} /></section></div><div className="results-end-actions"><button className="button button-secondary" onClick={() => navigate('/screening')}>Edit food log</button><button className="button button-outline" onClick={() => { localStorage.removeItem('aharwiseProfile'); localStorage.removeItem('aharwiseScreening'); window.location.hash = '#/' }}>Start over</button></div><div className="print-disclaimer"><p>{'AHARWISE provides general nutrition screening and educational information only. It does not diagnose, treat, or replace advice from a qualified healthcare professional or registered dietitian. Always check product labels for allergens and consult a professional for individual medical or clinical nutrition needs.'}</p><p>Results are estimates based on the information you provide. Always verify allergen information on product labels.</p></div></div>
+}
+
+export default function ExplorePage() {
+  const { pathname } = useLocation()
+  if (pathname === '/budget') return <BudgetPage />
+  if (pathname === '/substitutions') return <SubstitutionsPage />
+  if (pathname === '/gaps') return <GapsPage />
+  return <ResultsPage />
+}

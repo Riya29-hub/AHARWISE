@@ -1,0 +1,22 @@
+[
+  { "from": "milk", "to": "soy-milk", "reason": "allergy", "tags": ["dairy-free", "protein"], "goal": "protein", "note": "Fortified soy milk may be a dairy-free alternative; check the label and fortification.", "allergenWarning": "Contains soy. Verify the product label." },
+  { "from": "milk", "to": "oat-milk", "reason": "allergy", "tags": ["dairy-free"], "note": "Oat milk may be an option; nutrient content varies by brand.", "allergenWarning": "May contain gluten; verify the product label." },
+  { "from": "milk", "to": "almond-milk", "reason": "allergy", "tags": ["dairy-free"], "note": "Almond milk may be an option when tree nuts are safe for the family.", "allergenWarning": "Contains tree nuts. Verify the product label." },
+  { "from": "paneer", "to": "tofu", "reason": "allergy", "tags": ["dairy-free", "protein"], "goal": "protein", "note": "Tofu can be used in similar savoury dishes.", "allergenWarning": "Contains soy. Verify the product label." },
+  { "from": "paneer", "to": "moong-dal", "reason": "cost", "tags": ["budget", "protein"], "goal": "protein", "note": "Moong dal is a lower-cost plant protein option." },
+  { "from": "rice", "to": "brown-rice", "reason": "nutrition", "tags": ["fiber"], "goal": "fiber", "note": "Brown rice provides more fiber per 100 g in these sample values." },
+  { "from": "wheat-atta", "to": "ragi", "reason": "nutrition", "tags": ["calcium", "gluten-free"], "goal": "calcium", "note": "Ragi may be a naturally gluten-free grain option; check for cross-contact." },
+  { "from": "biscuits", "to": "chana", "reason": "nutrition", "tags": ["protein", "fiber"], "goal": "protein", "note": "Roasted chana can be a savoury snack with protein and fiber." },
+  { "from": "packaged-juice", "to": "orange", "reason": "nutrition", "tags": ["whole-fruit", "fiber"], "goal": "fiber", "note": "A whole fruit retains more fiber than strained juice." },
+  { "from": "packaged-juice", "to": "guava", "reason": "cost", "tags": ["whole-fruit", "fiber"], "goal": "fiber", "note": "Seasonal whole guava may be a budget-friendly fruit choice." },
+  { "from": "instant-noodles", "to": "poha", "reason": "cost", "tags": ["quick-meal"], "note": "Poha with vegetables may be a simple pantry alternative." },
+  { "from": "peanuts", "to": "chana", "reason": "allergy", "tags": ["peanut-free", "protein"], "goal": "protein", "note": "Roasted chana is a peanut-free option in this sample list." },
+  { "from": "peanuts", "to": "sunflower-seeds", "reason": "allergy", "tags": ["peanut-free"], "note": "Sunflower seeds can be used where seeds are safe.", "allergenWarning": "Check for seed allergy and cross-contact on the label." },
+  { "from": "eggs", "to": "paneer", "reason": "allergy", "tags": ["egg-free", "protein"], "goal": "protein", "note": "Paneer may be used for an egg-free vegetarian option.", "allergenWarning": "Contains milk. Verify the product label." },
+  { "from": "eggs", "to": "moong-dal", "reason": "nutrition", "tags": ["plant-protein"], "goal": "protein", "note": "Moong dal provides plant-based protein." },
+  { "from": "fish", "to": "soya-chunks", "reason": "allergy", "tags": ["fish-free", "protein"], "goal": "protein", "note": "Soya chunks can replace fish in some savoury dishes.", "allergenWarning": "Contains soy. Verify the product label." },
+  { "from": "fish", "to": "rajma", "reason": "cost", "tags": ["plant-protein", "budget"], "goal": "protein", "note": "Rajma is a plant-based budget alternative for the meal." },
+  { "from": "almonds", "to": "peanuts", "reason": "cost", "tags": ["budget", "protein"], "goal": "protein", "note": "Peanuts may cost less; only use if peanut is safe for the family.", "allergenWarning": "Contains peanut. Verify the product label." },
+  { "from": "almonds", "to": "chana", "reason": "cost", "tags": ["budget", "protein"], "goal": "protein", "note": "Roasted chana is a lower-cost snack option." },
+  { "from": "brown-rice", "to": "ragi", "reason": "availability", "tags": ["local", "calcium"], "goal": "calcium", "note": "Ragi is a locally common grain alternative in many Bengaluru stores." }
+]
