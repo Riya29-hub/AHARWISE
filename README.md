@@ -15,7 +15,8 @@ Many middle-class Indian households manage multi-generational meals (toddlers, c
 
 ## Solution Overview
 
-**AHARWISE** is a privacy-first, 100% client-side educational nutrition screening tool. Families enter their household members, strict dietary pattern, allergens, city, store type, and weekly ₹ budget—entirely stored in browser `localStorage`—to screen everyday meals, detect simplified nutrient gaps, explore cost-aware food swaps, and generate a budget-fitting grocery checklist.
+**AHARWISE** is a privacy-first, 100% client-side educational nutrition screening tool. Families enter their household members, strict dietary pattern, allergens, city, store type, and weekly ₹ budget—entirely stored in browser `localStorage`—to screen everyday meals, detect simplified nutrient gaps, explore cost-aware food swaps, and generate a budget-fitting grocery checklist. 
+Project done by Dinesh B, Dharshini S G , M S Hashni, Harshitha V
 
 > **Disclaimer**: AHARWISE is strictly an **educational nutrition screening** tool. It does not diagnose, treat, or replace advice from a qualified healthcare professional or registered dietitian.
 
